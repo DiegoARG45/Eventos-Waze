@@ -1,4 +1,3 @@
-# Importar librerías y dependencias
 import sys
 print("Python version:", sys.version)
 
@@ -44,6 +43,31 @@ event_names = {
 # Inicializar la app de dash
 app = dash.Dash(__name__)
 
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Waze Dashboard</title>
+        {%metas%}
+        {%favicon%}
+        {%css%}
+    </head>
+    <body>
+        <div id="react-root">
+            {%app_entry%}
+        </div>
+        {%config%}
+        {%scripts%}
+        {%renderer%}
+        
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/vega@5.20.2/build/vega.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/vega-lite@5.6.0/build/vega-lite.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/vega-embed@6.20.2"></script>
+    </body>
+</html>
+'''
 # Layout de la aplicación
 app.layout = html.Div([
     html.Div([
@@ -576,32 +600,6 @@ def create_recent_events(processed_data):
         )
     
     return event_items
-
-app.index_string = '''
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Waze Dashboard</title>
-    {%metas%}
-    {%favicon%}
-    {%css%}
-</head>
-<body>
-    <div id="app">
-        {%app_entry%}
-    </div>
-    {%config%}
-    {%scripts%}
-    {%renderer%}
-    
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega@5.20.2/build/vega.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5.6.0/build/vega-lite.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6.20.2"></script>
-</body>
-</html>
-'''
 
 if 'DYNO' in os.environ:
     app.scripts.append_script({
