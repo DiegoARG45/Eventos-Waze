@@ -74,7 +74,7 @@ app.layout = html.Div([
         html.H1('EVENTOS DE WAZE', style={'textAlign': 'center', 'fontFamily': 'Calibri'}),
         dcc.Interval(
             id='interval-component',
-            interval=60*1000,  # actualiza cada minuto
+            interval=5*60*1000,  # actualiza cada minuto
             n_intervals=0
         ),
         html.Div(
