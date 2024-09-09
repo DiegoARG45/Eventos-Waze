@@ -13,7 +13,8 @@ try:
     print("Plotly version:", plotly.__version__)
 except ImportError:
     print("Error: Plotly is not installed")
-
+    
+import os
 import dash
 import plotly.express as px
 import plotly.graph_objects as go
@@ -577,6 +578,14 @@ def create_recent_events(processed_data):
     return event_items
 
 app.index_string = open('index.html').read()
+
+if 'DYNO' in os.environ:
+    app.scripts.append_script({
+        'external_url': 'https://cdn.jsdelivr.net/npm/vega@5.20.2/build/vega.min.js'
+    })
+    app.css.append_css({
+        'external_url': 'https://cdn.jsdelivr.net/npm/vega@5.20.2/build/vega.min.css'
+    })
 
 if __name__ == '__main__':
     app.run_server(debug=True)
