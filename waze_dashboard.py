@@ -13,7 +13,7 @@ try:
     print("Plotly version:", plotly.__version__)
 except ImportError:
     print("Error: Plotly is not installed")
-    
+
 import os
 import dash
 import plotly.express as px
@@ -577,7 +577,31 @@ def create_recent_events(processed_data):
     
     return event_items
 
-app.index_string = open('index.html').read()
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Waze Dashboard</title>
+    {%metas%}
+    {%favicon%}
+    {%css%}
+</head>
+<body>
+    <div id="app">
+        {%app_entry%}
+    </div>
+    {%config%}
+    {%scripts%}
+    {%renderer%}
+    
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega@5.20.2/build/vega.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-lite@5.6.0/build/vega-lite.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vega-embed@6.20.2"></script>
+</body>
+</html>
+'''
 
 if 'DYNO' in os.environ:
     app.scripts.append_script({
