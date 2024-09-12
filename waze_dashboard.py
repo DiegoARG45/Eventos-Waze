@@ -89,10 +89,27 @@ app.index_string = '''
 # Layout de la aplicación
 app.layout = html.Div([
     html.Div([
-        html.H1('EVENTOS DE WAZE', style={'textAlign': 'center', 'fontFamily': 'Calibri'}),
+        html.Div([
+            html.H1('EVENTOS DE WAZE', style={
+                'textAlign': 'mid-center', 
+                'fontFamily': 'Calibri', 
+                'flex': '1',
+                'margin': '0'
+            }),
+            html.Img(src='/assets/waze_logo.png', style={
+                'height': '100px', 
+                'marginLeft': 'auto'
+            })
+        ], style={
+            'display': 'flex', 
+            'alignItems': 'center', 
+            'width': '100%',
+            'maxWidth': '1200px',
+            'margin': '0 auto'
+        }),
         dcc.Interval(
             id='interval-component',
-            interval=5*60*1000,  # actualiza cada minuto
+            interval=5*60*1000,  # actualiza cada 5 minutos
             n_intervals=0
         ),
         html.Div(
@@ -135,7 +152,7 @@ app.layout = html.Div([
     'margin': '0 auto',
     'padding': '20px',
     'maxWidth': '1400px',
-    'backgroundColor': '#f0f0f0'
+    'backgroundColor': '#e0e0e0'
 })
 
 # Función para actualizar las alertas por tipo
