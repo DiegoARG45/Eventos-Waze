@@ -13,6 +13,7 @@ try:
 except ImportError:
     print("Error: Plotly is not installed")
 
+import sys
 import os
 import dash
 import plotly.express as px
@@ -23,7 +24,10 @@ from dash.dependencies import Input, Output, State
 from fetch_waze_data import fetch_waze_data, process_waze_data
 from datetime import datetime
 from collections import defaultdict
+import pytz
 
+# Definimos la zona horaria de Buenos Aires
+buenos_aires_tz = pytz.timezone('America/Argentina/Buenos_Aires')
 
 # Diccionario de nombres de eventos
 event_names = {
@@ -65,16 +69,30 @@ app.index_string = '''
         <script src="https://cdn.jsdelivr.net/npm/vega@5.20.2/build/vega.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/vega-lite@5.6.0/build/vega-lite.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/vega-embed@6.20.2"></script>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const buttons = document.querySelectorAll('button[id^="alert-button"]');
+                buttons.forEach(button => {
+                    const buttonIndex = button.id.split('"index":')[1].split('}')[0];
+                    if (localStorage.getItem(buttonIndex) === 'clicked') {
+                        button.style.backgroundColor = 'lightblue';
+                    }
+                });
+            });
+        </script>
+
     </body>
 </html>
 '''
+
 # Layout de la aplicación
 app.layout = html.Div([
     html.Div([
         html.H1('EVENTOS DE WAZE', style={'textAlign': 'center', 'fontFamily': 'Calibri'}),
         dcc.Interval(
             id='interval-component',
-            interval=60*1000,  # actualiza cada minuto
+            interval=5*60*1000,  # actualiza cada minuto
             n_intervals=0
         ),
         html.Div(
@@ -109,7 +127,9 @@ app.layout = html.Div([
         html.Div(id='event-details', style={'width': '100%'})
     ], style={'width': '100%', 'maxWidth': '1400px', 'margin': '0 auto'}),
 
-    dcc.Store(id='processed-data-store')
+    dcc.Store(id='processed-data-store'),
+    dcc.Store(id='clicked-buttons', data=[])
+
 ], style={
     'fontFamily': 'Calibri, Calibri',
     'margin': '0 auto',
@@ -146,21 +166,22 @@ def update_alerts_by_type_figure(processed_data):
      Input('alerts-map', 'clickData')]
 )
 def update_dashboard_and_isolate_legend_click(n_intervals, clickData):
+    
     api_url = "https://www.waze.com/row-partnerhub-api/partners/11517520851/waze-feeds/4004dedf-0b87-4eed-b3f6-e0ad22fa5238?format=1"
     raw_data = fetch_waze_data(api_url)
+    # Filtrar eventos con reportRating >= 5 y que no sean reportados por "batransito"
+    raw_data['alerts'] = [alert for alert in raw_data.get('alerts', []) if alert.get('reportRating', 0) >= 4 and alert.get('reportBy') != "batransito"]
     processed_data = process_waze_data(raw_data)
-    
     alerts_jams = html.Div([
         html.H3(f"Total de Alertas: {processed_data['alerts']}"),
         html.H3(f"Total de Atascos: {processed_data['jams']}")
+
     ])
-    
+ 
     df = pd.DataFrame(processed_data['alert_coordinates'])
-    
     if not df.empty:
         center_lat = df['lat'].mean()
         center_lon = df['lon'].mean()
-    
     alert_map = px.scatter_mapbox(df, 
                                   lat="lat", 
                                   lon="lon", 
@@ -177,6 +198,45 @@ def update_dashboard_and_isolate_legend_click(n_intervals, clickData):
                                   title="Mapa de Alertas")
     alert_map.update_traces(marker=dict(size=15))
     alert_map.update_layout(
+        mapbox_style="open-street-map",
+        height=600,
+        margin=dict(l=0, r=0, t=50, b=0),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.1,
+            xanchor="center",
+            x=0.5
+        ),
+        dragmode='pan',
+        hovermode='closest',        
+        clickmode='event+select'
+
+    )
+
+    if clickData:
+        selected_event = clickData['points'][0]['curveNumber']
+        filtered_df = df[df['evento'] == selected_event]
+        if not filtered_df.empty:
+            center_lat = filtered_df['lat'].mean()
+            center_lon = filtered_df['lon'].mean()
+            alert_map = px.scatter_mapbox(filtered_df, 
+                                          lat="lat", 
+                                          lon="lon", 
+                                          color="evento",  
+                                          hover_name="street",
+                                          hover_data={
+                                              "nearest_intersection": False,
+                                              "evento": True,
+                                              "lat": False,
+                                              "lon": False
+                                          },
+                                          labels={"nearest_intersection": "Intersección más cercana", "evento": "Evento"},
+                                          zoom=12,
+                                          center=dict(lat=center_lat, lon=center_lon),
+                                          title="Mapa de Alertas")
+            alert_map.update_traces(marker=dict(size=15))
+            alert_map.update_layout(
         mapbox_style="open-street-map",
         height=600,
         margin=dict(l=0, r=0, t=50, b=0),
@@ -257,7 +317,8 @@ def process_waze_data(raw_data):
             subtype = event_names.get(subtype, subtype)
             
             pubMillis = alert.get('pubMillis', 0)
-            date_obj = datetime.fromtimestamp(pubMillis / 1000.0)
+            # Convertimos la fecha a la zona horaria de Buenos Aires
+            date_obj = datetime.fromtimestamp(pubMillis / 1000.0, tz=pytz.UTC).astimezone(buenos_aires_tz)
             date_str = date_obj.strftime('%d/%m %H:%M')
             
             street = alert.get('street', 'Calle desconocida')
@@ -279,7 +340,7 @@ def process_waze_data(raw_data):
                 processed_data['alert_coordinates'].append({
                     'lat': alert['location']['y'],
                     'lon': alert['location']['x'],
-                    'evento': subtype,  # Cambiado de 'subtype' a 'evento'
+                    'evento': subtype,
                     'street': street,
                     'nearest_intersection': nearest_intersection
                 })
@@ -289,9 +350,9 @@ def process_waze_data(raw_data):
         processed_data['total_jam_length'] = sum(jam.get('length', 0) for jam in raw_data['jams'])
     return processed_data
 
+
 # Función para crear un minimapa
-def create_minimap(lat, lon, street=None, nearest_intersection=None):
-    # Verifica si las coordenadas están disponibles
+def create_minimap(lat, lon, street=None, nearest_intersection=None, evento=None, date=None):
     if lat is None or lon is None:
         fig = go.Figure()
         fig.update_layout(
@@ -302,10 +363,14 @@ def create_minimap(lat, lon, street=None, nearest_intersection=None):
         )
         return fig
     else:
-        # Prepara el texto que se mostrará en el hover
-        hover_text = f'Ubicación del incidente'
+        # Preparamos el texto que se mostrará en el hover
+        hover_text = f'Evento: {evento}<br>'
         if street:
-            hover_text += f'<br>Calle: {street}'
+            hover_text += f'Calle: {street}<br>'
+        if nearest_intersection:
+            hover_text += f'Intersección más cercana: {nearest_intersection}<br>'
+        if date:
+            hover_text += f'Fecha: {date}'
         
         fig = go.Figure(go.Scattermapbox(
             lat=[lat],
@@ -345,7 +410,8 @@ def create_event_details(processed_data):
         
         alert_items = []
         for i, alert in enumerate(sorted_alerts[:10]):
-            short_date = alert['date_obj'].strftime('%d/%m %H:%M')
+            # Aseguramos que la fecha esté en la zona horaria de Buenos Aires
+            short_date = alert['date_obj'].astimezone(buenos_aires_tz).strftime('%d/%m %H:%M')
             alert_items.append(
                 html.Div([
                     html.Button(
@@ -445,19 +511,36 @@ def update_page(prev_clicks, next_clicks, page_data, button_id, processed_data):
 # Callback para alternar la visibilidad de los minimapas de alertas
 @app.callback(
     [Output({'type': 'alert-minimap', 'index': dash.MATCH}, 'children'),
-     Output({'type': 'alert-minimap', 'index': dash.MATCH}, 'style')],
+     Output({'type': 'alert-minimap', 'index': dash.MATCH}, 'style'),
+     Output({'type': 'alert-button', 'index': dash.MATCH}, 'style')],
     [Input({'type': 'alert-button', 'index': dash.MATCH}, 'n_clicks')],
     [State({'type': 'alert-minimap', 'index': dash.MATCH}, 'style'),
      State({'type': 'alert-button', 'index': dash.MATCH}, 'id'),
-     State('processed-data-store', 'data')]
+     State('processed-data-store', 'data'),
+     State('clicked-buttons', 'data')]
 )
-def toggle_minimap(n_clicks, current_style, button_id, processed_data):
+def toggle_minimap(n_clicks, current_style, button_id, processed_data, clicked_buttons):
     if n_clicks is None:
-        return dash.no_update, dash.no_update
-    
+        return dash.no_update, dash.no_update, dash.no_update
+
     subtype, index = button_id['index'].split('-')
     index = int(index)
-    
+
+    button_index = f"{subtype}-{index}"
+    if button_index not in clicked_buttons:
+        clicked_buttons.append(button_index)
+
+    script = f"""
+    localStorage.setItem('{button_index}', 'clicked');
+    """
+
+    button_style = {
+        'display': 'block',
+        'marginBottom': '5px',
+        'width': '100%',
+        'backgroundColor': 'lightblue' if button_index in clicked_buttons else 'white'
+    }
+
     if processed_data and 'alert_details' in processed_data:
         if subtype in processed_data['alert_details']:
             sorted_alerts = sorted(processed_data['alert_details'][subtype], key=lambda x: x['date_obj'], reverse=True)
@@ -465,12 +548,15 @@ def toggle_minimap(n_clicks, current_style, button_id, processed_data):
                 alert = sorted_alerts[index]
                 lat, lon = extract_coordinates(alert['location'])
                 street = alert['street']
-                minimap = dcc.Graph(figure=create_minimap(lat, lon, street), style={'height': '200px', 'width': '100%'})
-                
+                nearest_intersection = alert.get('nearest_intersection', 'No disponible')
+                date = alert['date']
+                minimap = dcc.Graph(figure=create_minimap(lat, lon, street, nearest_intersection, subtype, date), style={'height': '200px', 'width': '100%'})
+
                 new_style = {'display': 'block'} if current_style.get('display') == 'none' else {'display': 'none'}
-                return minimap, new_style
-    
-    return "No se pudo cargar el mapa", {'display': 'none'}
+                return minimap, new_style, button_style
+
+    return "No se pudo cargar el mapa", {'display': 'none'}, button_style
+
 
 # Callback para alternar la visibilidad de los minimapas de eventos recientes
 @app.callback(
@@ -498,7 +584,9 @@ def toggle_recent_event_minimap(n_clicks, current_style, button_id, processed_da
         event = sorted_events[index]
         lat, lon = extract_coordinates(event['location'])
         street = event['street']
-        minimap = dcc.Graph(figure=create_minimap(lat, lon, street), style={'height': '200px', 'width': '100%'})
+        nearest_intersection = event.get('nearest_intersection', 'No disponible')
+        date = event['date']
+        minimap = dcc.Graph(figure=create_minimap(lat, lon, street, nearest_intersection, event['subtype'], date), style={'height': '200px', 'width': '100%'})
         
         new_style = {'display': 'block'} if current_style.get('display') == 'none' else {'display': 'none'}
         return minimap, new_style
@@ -587,7 +675,8 @@ def create_recent_events(processed_data):
     
     event_items = []
     for i, event in enumerate(sorted_events):
-        short_date = event['date_obj'].strftime('%d/%m %H:%M')  # Formato de fecha corta
+        # Aseguramos que la fecha esté en la zona horaria de Buenos Aires
+        short_date = event['date_obj'].astimezone(buenos_aires_tz).strftime('%d/%m %H:%M')
         event_items.append(
             html.Div([
                 html.Button(
@@ -610,4 +699,4 @@ if 'DYNO' in os.environ:
     })
 
 if __name__ == '__main__':
-    app.run_server(debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
+    app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
