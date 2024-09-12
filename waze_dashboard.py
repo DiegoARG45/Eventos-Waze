@@ -699,8 +699,4 @@ if 'DYNO' in os.environ:
     })
 
 if __name__ == '__main__':
-<<<<<<< HEAD
     app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
-=======
-    app.run_server(debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
->>>>>>> 7f9451b9f9b3c35ca218c6b7af65a7bb37d51520
