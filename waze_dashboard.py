@@ -19,8 +19,8 @@ import dash
 import plotly.express as px
 import plotly.graph_objects as go
 import math
-from dash import Dash, html, dcc
-from dash.dependencies import Input, Output, State
+from dash import html, dcc
+from dash.dependencies import Input, Output, State 
 from fetch_waze_data import fetch_waze_data, process_waze_data
 from datetime import datetime
 from collections import defaultdict
@@ -145,10 +145,29 @@ app.layout = html.Div([
     ], style={'width': '100%', 'maxWidth': '1400px', 'margin': '0 auto'}),
 
     dcc.Store(id='processed-data-store'),
-    dcc.Store(id='clicked-buttons', data=[])
+    dcc.Store(id='clicked-buttons', data=[]),
 
-], style={
-    'fontFamily': 'Calibri, Calibri',
+    html.Script('''
+        document.addEventListener('DOMContentLoaded', function() {
+            const buttons = document.querySelectorAll('button[id^="alert-button"], button[id^="recent-event-button"]');
+            buttons.forEach(button => {
+                let buttonIndex;
+                if (button.id.startsWith('{')) {
+                    buttonIndex = button.id.split('"index":')[1].split('}')[0];
+                } else {
+                    buttonIndex = button.id.split('-')[2];
+                    buttonIndex = 'recent-event-' + buttonIndex;
+                }
+                if (localStorage.getItem(buttonIndex) === 'clicked') {
+                    button.style.backgroundColor = 'lightblue';
+                }
+            });
+        });
+    ''')
+
+],  
+ style={
+    'fontFamily': 'Roboto, Calibri',
     'margin': '0 auto',
     'padding': '20px',
     'maxWidth': '1400px',
@@ -187,7 +206,7 @@ def update_dashboard_and_isolate_legend_click(n_intervals, clickData):
     api_url = "https://www.waze.com/row-partnerhub-api/partners/11517520851/waze-feeds/4004dedf-0b87-4eed-b3f6-e0ad22fa5238?format=1"
     raw_data = fetch_waze_data(api_url)
     # Filtrar eventos con reportRating >= 5 y que no sean reportados por "batransito"
-    raw_data['alerts'] = [alert for alert in raw_data.get('alerts', []) if alert.get('reportRating', 0) >= 4 and alert.get('reportBy') != "batransito"]
+    raw_data['alerts'] = [alert for alert in raw_data.get('alerts', []) if alert.get('reportRating', 0) >= 4 and alert.get('reporter') != "Buenos_Aires"]
     processed_data = process_waze_data(raw_data)
     alerts_jams = html.Div([
         html.H3(f"Total de Alertas: {processed_data['alerts']}"),
@@ -427,18 +446,31 @@ def create_event_details(processed_data):
         
         alert_items = []
         for i, alert in enumerate(sorted_alerts[:10]):
-            # Aseguramos que la fecha esté en la zona horaria de Buenos Aires
-            short_date = alert['date_obj'].astimezone(buenos_aires_tz).strftime('%d/%m %H:%M')
-            alert_items.append(
-                html.Div([
-                    html.Button(
-                        f"{short_date} - {alert['street']}",
-                        id={'type': 'alert-button', 'index': f"{subtype}-{i}"},
-                        style={'display': 'block', 'marginBottom': '5px', 'width': '100%', 'textAlign': 'left', 'overflow': 'hidden', 'textOverflow': 'ellipsis', 'whiteSpace': 'nowrap'}
-                    ),
-                    html.Div(id={'type': 'alert-minimap', 'index': f"{subtype}-{i}"}, style={'display': 'none'})
-                ])
-            )
+                short_date = alert['date_obj'].astimezone(buenos_aires_tz).strftime('%d/%m %H:%M')
+                alert_items.append(
+                    html.Div([
+                        html.Button(
+                            f"{short_date} - {alert['street']}",
+                            id={'type': 'alert-button', 'index': f"{subtype}-{i}"},
+                            style={
+                                'display': 'block',
+                                'marginBottom': '5px',
+                                'width': '100%',
+                                'textAlign': 'left',
+                                'overflow': 'hidden',
+                                'textOverflow': 'ellipsis',
+                                'whiteSpace': 'nowrap',
+                                'borderRadius': '15px',  # Botones más redondeados
+                                'fontFamily': '"Roboto", sans-serif',  # Fuente más moderna
+                                'border': 'none',
+                                'padding': '10px',
+                                'backgroundColor': 'white',
+                                'transition': 'background-color 0.3s'
+                            }
+                        ),
+                        html.Div(id={'type': 'alert-minimap', 'index': f"{subtype}-{i}"}, style={'display': 'none'})
+                    ])
+                )
         
         pagination = html.Div([
             html.Button("Anterior", id={'type': 'prev-button', 'subtype': subtype}, disabled=True),
@@ -533,10 +565,9 @@ def update_page(prev_clicks, next_clicks, page_data, button_id, processed_data):
     [Input({'type': 'alert-button', 'index': dash.MATCH}, 'n_clicks')],
     [State({'type': 'alert-minimap', 'index': dash.MATCH}, 'style'),
      State({'type': 'alert-button', 'index': dash.MATCH}, 'id'),
-     State('processed-data-store', 'data'),
-     State('clicked-buttons', 'data')]
+     State('processed-data-store', 'data')]
 )
-def toggle_minimap(n_clicks, current_style, button_id, processed_data, clicked_buttons):
+def toggle_minimap(n_clicks, current_style, button_id, processed_data):
     if n_clicks is None:
         return dash.no_update, dash.no_update, dash.no_update
 
@@ -544,8 +575,6 @@ def toggle_minimap(n_clicks, current_style, button_id, processed_data, clicked_b
     index = int(index)
 
     button_index = f"{subtype}-{index}"
-    if button_index not in clicked_buttons:
-        clicked_buttons.append(button_index)
 
     script = f"""
     localStorage.setItem('{button_index}', 'clicked');
@@ -555,8 +584,18 @@ def toggle_minimap(n_clicks, current_style, button_id, processed_data, clicked_b
         'display': 'block',
         'marginBottom': '5px',
         'width': '100%',
-        'backgroundColor': 'lightblue' if button_index in clicked_buttons else 'white'
+        'textAlign': 'left',
+        'overflow': 'hidden',
+        'textOverflow': 'ellipsis',
+        'whiteSpace': 'nowrap',
+        'borderRadius': '15px',
+        'fontFamily': '"Roboto", sans-serif',
+        'border': 'none',
+        'padding': '10px',
+        'backgroundColor': 'lightblue',
+        'transition': 'background-color 0.3s'
     }
+
 
     if processed_data and 'alert_details' in processed_data:
         if subtype in processed_data['alert_details']:
@@ -578,7 +617,8 @@ def toggle_minimap(n_clicks, current_style, button_id, processed_data, clicked_b
 # Callback para alternar la visibilidad de los minimapas de eventos recientes
 @app.callback(
     [Output({'type': 'recent-event-minimap', 'index': dash.MATCH}, 'children'),
-     Output({'type': 'recent-event-minimap', 'index': dash.MATCH}, 'style')],
+     Output({'type': 'recent-event-minimap', 'index': dash.MATCH}, 'style'),
+     Output({'type': 'recent-event-button', 'index': dash.MATCH}, 'style')],  # Nuevo output para el estilo del botón
     [Input({'type': 'recent-event-button', 'index': dash.MATCH}, 'n_clicks')],
     [State({'type': 'recent-event-minimap', 'index': dash.MATCH}, 'style'),
      State({'type': 'recent-event-button', 'index': dash.MATCH}, 'id'),
@@ -586,9 +626,30 @@ def toggle_minimap(n_clicks, current_style, button_id, processed_data, clicked_b
 )
 def toggle_recent_event_minimap(n_clicks, current_style, button_id, processed_data):
     if n_clicks is None:
-        return dash.no_update, dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update
     
     index = button_id['index']
+    button_index = f"recent-event-{index}"
+    
+    script = f"""
+    localStorage.setItem('{button_index}', 'clicked');
+    """
+    
+    button_style = {
+        'display': 'block',
+        'marginBottom': '5px',
+        'width': '100%',
+        'textAlign': 'left',
+        'overflow': 'hidden',
+        'textOverflow': 'ellipsis',
+        'whiteSpace': 'nowrap',
+        'borderRadius': '15px',
+        'fontFamily': '"Roboto", sans-serif',
+        'border': 'none',
+        'padding': '10px',
+        'backgroundColor': 'lightblue',
+        'transition': 'background-color 0.3s'
+    }
     
     all_events = []
     for subtype, alerts in processed_data['alert_details'].items():
@@ -597,8 +658,8 @@ def toggle_recent_event_minimap(n_clicks, current_style, button_id, processed_da
     
     sorted_events = sorted(all_events, key=lambda x: x['date_obj'], reverse=True)[:15]
     
-    if index < len(sorted_events):
-        event = sorted_events[index]
+    if int(index) < len(sorted_events):
+        event = sorted_events[int(index)]
         lat, lon = extract_coordinates(event['location'])
         street = event['street']
         nearest_intersection = event.get('nearest_intersection', 'No disponible')
@@ -606,9 +667,9 @@ def toggle_recent_event_minimap(n_clicks, current_style, button_id, processed_da
         minimap = dcc.Graph(figure=create_minimap(lat, lon, street, nearest_intersection, event['subtype'], date), style={'height': '200px', 'width': '100%'})
         
         new_style = {'display': 'block'} if current_style.get('display') == 'none' else {'display': 'none'}
-        return minimap, new_style
+        return minimap, new_style, button_style
     
-    return "No se pudo cargar el mapa", {'display': 'none'}
+    return "No se pudo cargar el mapa", {'display': 'none'}, button_style
 
 # Callback para aislar el clic en la leyenda del mapa de alertas
 #@app.callback(
@@ -699,7 +760,21 @@ def create_recent_events(processed_data):
                 html.Button(
                     f"{event['subtype']} - {short_date} - {event['street']}",
                     id={'type': 'recent-event-button', 'index': i},
-                    style={'display': 'block', 'marginBottom': '5px', 'width': '100%', 'textAlign': 'left'}
+                    style={
+                        'display': 'block',
+                        'marginBottom': '5px',
+                        'width': '100%',
+                        'textAlign': 'left',
+                        'overflow': 'hidden',
+                        'textOverflow': 'ellipsis',
+                        'whiteSpace': 'nowrap',
+                        'borderRadius': '15px',
+                        'fontFamily': '"Roboto", sans-serif',
+                        'border': 'none',
+                        'padding': '10px',
+                        'backgroundColor': 'white',
+                        'transition': 'background-color 0.3s'
+                    }
                 ),
                 html.Div(id={'type': 'recent-event-minimap', 'index': i}, style={'display': 'none'})
             ])
