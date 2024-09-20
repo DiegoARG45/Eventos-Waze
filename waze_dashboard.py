@@ -470,7 +470,7 @@ def create_event_details(processed_data):
                             'width': '100%',
                             'textAlign': 'left',
                             'overflow': 'hidden',
-                            'textOverflow': 'ellipsis',
+                            'textOverflow': 'ellipsis', 
                             'whiteSpace': 'nowrap',
                             'borderRadius': '15px',
                             'fontFamily': '"Roboto", sans-serif',
@@ -602,6 +602,7 @@ def update_page(prev_clicks, next_clicks, page_data, button_id, processed_data, 
      State('processed-data-store', 'data')]
 )
 def toggle_minimap(n_clicks, current_style, button_id, current_button_style, processed_data):
+
     if n_clicks is None:
         return dash.no_update, dash.no_update, dash.no_update
 
@@ -656,6 +657,7 @@ def toggle_minimap(n_clicks, current_style, button_id, current_button_style, pro
      State('processed-data-store', 'data')]
 )
 def toggle_recent_event_minimap(n_clicks, current_style, button_id, current_button_style, processed_data):
+    
     if n_clicks is None:
         return dash.no_update, dash.no_update, dash.no_update
     
