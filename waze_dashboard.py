@@ -47,7 +47,7 @@ event_names = {
 # Inicializar la app de dash
 app = dash.Dash(__name__)
 
-app.index_string = '''
+app.index_string = """
 <!DOCTYPE html>
 <html>
     <head>
@@ -69,22 +69,33 @@ app.index_string = '''
         <script src="https://cdn.jsdelivr.net/npm/vega@5.20.2/build/vega.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/vega-lite@5.6.0/build/vega-lite.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/vega-embed@6.20.2"></script>
+        <script src="/assets/local_storage_handler.js"></script>
 
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                const buttons = document.querySelectorAll('button[id^="alert-button"]');
-                buttons.forEach(button => {
-                    const buttonIndex = button.id.split('"index":')[1].split('}')[0];
-                    if (localStorage.getItem(buttonIndex) === 'clicked') {
-                        button.style.backgroundColor = 'lightblue';
-                    }
-                });
-            });
-        </script>
+    if (!window.dash_clientside) {
+        window.dash_clientside = {};
+    }
+    window.dash_clientside.clientside = {
+        update_button_style: function(n_clicks, id) {
+            var button = document.getElementById(JSON.stringify(id));
+            if (button.dataset.initialLoad) {
+                delete button.dataset.initialLoad;
+                var state = loadButtonState(JSON.stringify(id));
+                if (state === 'clicked') {
+                    button.style.backgroundColor = 'lightblue';
+                }
+            } else if (n_clicks) {
+                saveButtonState(JSON.stringify(id), 'clicked');
+                button.style.backgroundColor = 'lightblue';
+            }
+            return window.dash_clientside.no_update;
+        }
+    };
+</script>
 
     </body>
 </html>
-'''
+"""
 
 # Layout de la aplicación
 app.layout = html.Div([
@@ -146,6 +157,7 @@ app.layout = html.Div([
 
     dcc.Store(id='processed-data-store'),
     dcc.Store(id='clicked-buttons', data=[]),
+    html.Div(id='dummy-output'),
 
     html.Script('''
         document.addEventListener('DOMContentLoaded', function() {
@@ -441,40 +453,40 @@ def create_event_details(processed_data):
     ]
     
     def create_event_column(subtype, alerts, is_priority=False):
+        alert_items = []  # Inicializar la lista aquí
         sorted_alerts = sorted(alerts, key=lambda x: x['date_obj'], reverse=True)
         total_pages = math.ceil(len(sorted_alerts) / 10)
         
-        alert_items = []
-        for i, alert in enumerate(sorted_alerts[:10]):
-                short_date = alert['date_obj'].astimezone(buenos_aires_tz).strftime('%d/%m %H:%M')
-                alert_items.append(
-                    html.Div([
-                        html.Button(
-                            f"{short_date} - {alert['street']}",
-                            id={'type': 'alert-button', 'index': f"{subtype}-{i}"},
-                            style={
-                                'display': 'block',
-                                'marginBottom': '5px',
-                                'width': '100%',
-                                'textAlign': 'left',
-                                'overflow': 'hidden',
-                                'textOverflow': 'ellipsis',
-                                'whiteSpace': 'nowrap',
-                                'borderRadius': '15px',  # Botones más redondeados
-                                'fontFamily': '"Roboto", sans-serif',  # Fuente más moderna
-                                'border': 'none',
-                                'padding': '10px',
-                                'backgroundColor': 'white',
-                                'transition': 'background-color 0.3s'
-                            }
-                        ),
-                        html.Div(id={'type': 'alert-minimap', 'index': f"{subtype}-{i}"}, style={'display': 'none'})
-                    ])
-                )
+        for i, alert in enumerate(sorted_alerts[:10]):  # Procesar solo las primeras 10 alertas
+            short_date = alert['date_obj'].strftime('%d/%m %H:%M')
+            alert_items.append(
+                html.Div([
+                    html.Button(
+                        f"{short_date} - {alert['street']}",
+                        id={'type': 'alert-button', 'index': f"{subtype}-{i}"},
+                        style={
+                            'display': 'block',
+                            'marginBottom': '5px',
+                            'width': '100%',
+                            'textAlign': 'left',
+                            'overflow': 'hidden',
+                            'textOverflow': 'ellipsis',
+                            'whiteSpace': 'nowrap',
+                            'borderRadius': '15px',
+                            'fontFamily': '"Roboto", sans-serif',
+                            'border': 'none',
+                            'padding': '10px',
+                            'transition': 'background-color 0.3s'
+                        },
+                        **{'data-initial-load': 'true'}
+                    ),
+                    html.Div(id={'type': 'alert-minimap', 'index': f"{subtype}-{i}"}, style={'display': 'none'})
+                ])
+            )
         
         pagination = html.Div([
             html.Button("Anterior", id={'type': 'prev-button', 'subtype': subtype}, disabled=True),
-            html.Span(id={'type': 'page-display', 'subtype': subtype}, children="Página 1 de {}".format(total_pages)),
+            html.Span(id={'type': 'page-display', 'subtype': subtype}, children=f"Página 1 de {total_pages}"),
             html.Button("Siguiente", id={'type': 'next-button', 'subtype': subtype}, disabled=total_pages <= 1)
         ], style={'display': 'flex', 'justifyContent': 'space-between', 'alignItems': 'center', 'marginTop': '10px'})
         
@@ -510,9 +522,10 @@ def create_event_details(processed_data):
      Input({'type': 'next-button', 'subtype': dash.MATCH}, 'n_clicks')],
     [State({'type': 'page-store', 'subtype': dash.MATCH}, 'data'),
      State({'type': 'prev-button', 'subtype': dash.MATCH}, 'id'),
-     State('processed-data-store', 'data')]
+     State('processed-data-store', 'data'),
+     State({'type': 'alert-container', 'subtype': dash.MATCH}, 'children')]
 )
-def update_page(prev_clicks, next_clicks, page_data, button_id, processed_data):
+def update_page(prev_clicks, next_clicks, page_data, button_id, processed_data, current_children):
     ctx = dash.callback_context
     if not ctx.triggered:
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
@@ -538,12 +551,32 @@ def update_page(prev_clicks, next_clicks, page_data, button_id, processed_data):
             
             alert_items = []
             for i, alert in enumerate(page_alerts):
+                # Buscar el estilo existente del botón si existe
+                existing_style = {}
+                for child in current_children:
+                    if child['props']['children'][0]['props']['id']['index'] == f"{subtype}-{start+i}":
+                        existing_style = child['props']['children'][0]['props']['style']
+                        break
+                
                 alert_items.append(
                     html.Div([
                         html.Button(
                             f"{alert['date']} - {alert['street']}",
                             id={'type': 'alert-button', 'index': f"{subtype}-{start+i}"},
-                            style={'display': 'block', 'marginBottom': '5px', 'width': '100%'}
+                            style=existing_style or {
+                                'display': 'block',
+                                'marginBottom': '5px',
+                                'width': '100%',
+                                'textAlign': 'left',
+                                'overflow': 'hidden',
+                                'textOverflow': 'ellipsis',
+                                'whiteSpace': 'nowrap',
+                                'borderRadius': '15px',
+                                'fontFamily': '"Roboto", sans-serif',
+                                'border': 'none',
+                                'padding': '10px',
+                                'transition': 'background-color 0.3s'
+                            }
                         ),
                         html.Div(id={'type': 'alert-minimap', 'index': f"{subtype}-{start+i}"}, style={'display': 'none'})
                     ])
@@ -565,37 +598,15 @@ def update_page(prev_clicks, next_clicks, page_data, button_id, processed_data):
     [Input({'type': 'alert-button', 'index': dash.MATCH}, 'n_clicks')],
     [State({'type': 'alert-minimap', 'index': dash.MATCH}, 'style'),
      State({'type': 'alert-button', 'index': dash.MATCH}, 'id'),
+     State({'type': 'alert-button', 'index': dash.MATCH}, 'style'),
      State('processed-data-store', 'data')]
 )
-def toggle_minimap(n_clicks, current_style, button_id, processed_data):
+def toggle_minimap(n_clicks, current_style, button_id, current_button_style, processed_data):
     if n_clicks is None:
         return dash.no_update, dash.no_update, dash.no_update
 
     subtype, index = button_id['index'].split('-')
     index = int(index)
-
-    button_index = f"{subtype}-{index}"
-
-    script = f"""
-    localStorage.setItem('{button_index}', 'clicked');
-    """
-
-    button_style = {
-        'display': 'block',
-        'marginBottom': '5px',
-        'width': '100%',
-        'textAlign': 'left',
-        'overflow': 'hidden',
-        'textOverflow': 'ellipsis',
-        'whiteSpace': 'nowrap',
-        'borderRadius': '15px',
-        'fontFamily': '"Roboto", sans-serif',
-        'border': 'none',
-        'padding': '10px',
-        'backgroundColor': 'lightblue',
-        'transition': 'background-color 0.3s'
-    }
-
 
     if processed_data and 'alert_details' in processed_data:
         if subtype in processed_data['alert_details']:
@@ -609,47 +620,46 @@ def toggle_minimap(n_clicks, current_style, button_id, processed_data):
                 minimap = dcc.Graph(figure=create_minimap(lat, lon, street, nearest_intersection, subtype, date), style={'height': '200px', 'width': '100%'})
 
                 new_style = {'display': 'block'} if current_style.get('display') == 'none' else {'display': 'none'}
-                return minimap, new_style, button_style
+                
+                # Actualizar el estilo del botón
+                new_button_style = dict(current_button_style)
+                new_button_style['backgroundColor'] = 'lightblue'
 
-    return "No se pudo cargar el mapa", {'display': 'none'}, button_style
+                # Guardar el estado del botón
+                app.clientside_callback(
+                    """
+                    function(n_clicks, id) {
+                        if (n_clicks) {
+                            saveButtonState(JSON.stringify(id), 'clicked');
+                        }
+                        return window.dash_clientside.no_update;
+                    }
+                    """,
+                    Output({'type': 'alert-button', 'index': dash.MATCH}, 'data-clicked'),
+                    [Input({'type': 'alert-button', 'index': dash.MATCH}, 'n_clicks')],
+                    [State({'type': 'alert-button', 'index': dash.MATCH}, 'id')]
+                )
 
+                return minimap, new_style, new_button_style
+
+    return "No se pudo cargar el mapa", {'display': 'none'}, current_button_style
 
 # Callback para alternar la visibilidad de los minimapas de eventos recientes
 @app.callback(
     [Output({'type': 'recent-event-minimap', 'index': dash.MATCH}, 'children'),
      Output({'type': 'recent-event-minimap', 'index': dash.MATCH}, 'style'),
-     Output({'type': 'recent-event-button', 'index': dash.MATCH}, 'style')],  # Nuevo output para el estilo del botón
+     Output({'type': 'recent-event-button', 'index': dash.MATCH}, 'style')],
     [Input({'type': 'recent-event-button', 'index': dash.MATCH}, 'n_clicks')],
     [State({'type': 'recent-event-minimap', 'index': dash.MATCH}, 'style'),
      State({'type': 'recent-event-button', 'index': dash.MATCH}, 'id'),
+     State({'type': 'recent-event-button', 'index': dash.MATCH}, 'style'),
      State('processed-data-store', 'data')]
 )
-def toggle_recent_event_minimap(n_clicks, current_style, button_id, processed_data):
+def toggle_recent_event_minimap(n_clicks, current_style, button_id, current_button_style, processed_data):
     if n_clicks is None:
         return dash.no_update, dash.no_update, dash.no_update
     
     index = button_id['index']
-    button_index = f"recent-event-{index}"
-    
-    script = f"""
-    localStorage.setItem('{button_index}', 'clicked');
-    """
-    
-    button_style = {
-        'display': 'block',
-        'marginBottom': '5px',
-        'width': '100%',
-        'textAlign': 'left',
-        'overflow': 'hidden',
-        'textOverflow': 'ellipsis',
-        'whiteSpace': 'nowrap',
-        'borderRadius': '15px',
-        'fontFamily': '"Roboto", sans-serif',
-        'border': 'none',
-        'padding': '10px',
-        'backgroundColor': 'lightblue',
-        'transition': 'background-color 0.3s'
-    }
     
     all_events = []
     for subtype, alerts in processed_data['alert_details'].items():
@@ -667,9 +677,40 @@ def toggle_recent_event_minimap(n_clicks, current_style, button_id, processed_da
         minimap = dcc.Graph(figure=create_minimap(lat, lon, street, nearest_intersection, event['subtype'], date), style={'height': '200px', 'width': '100%'})
         
         new_style = {'display': 'block'} if current_style.get('display') == 'none' else {'display': 'none'}
-        return minimap, new_style, button_style
+        
+        # Actualizar el estilo del botón
+        new_button_style = dict(current_button_style)
+        new_button_style['backgroundColor'] = 'lightblue'
+        
+        # Guardar el estado del botón
+        app.clientside_callback(
+            """
+            function(n_clicks, id) {
+                if (n_clicks) {
+                    saveButtonState(JSON.stringify(id), 'clicked');
+                }
+                return window.dash_clientside.no_update;
+            }
+            """,
+            Output({'type': 'recent-event-button', 'index': dash.MATCH}, 'data-clicked'),
+            [Input({'type': 'recent-event-button', 'index': dash.MATCH}, 'n_clicks')],
+            [State({'type': 'recent-event-button', 'index': dash.MATCH}, 'id')]
+        )
+        
+        return minimap, new_style, new_button_style
     
-    return "No se pudo cargar el mapa", {'display': 'none'}, button_style
+    return "No se pudo cargar el mapa", {'display': 'none'}, current_button_style
+
+@app.callback(
+Output('dummy-output', 'children'),
+[Input('interval-component', 'n_intervals')]
+)
+def apply_stored_styles(n_intervals):
+    return dcc.Loading(
+        id="loading-icon",
+        children=[html.Div(id="loading-output")],
+        type="default",
+    )
 
 # Callback para aislar el clic en la leyenda del mapa de alertas
 #@app.callback(
@@ -772,9 +813,9 @@ def create_recent_events(processed_data):
                         'fontFamily': '"Roboto", sans-serif',
                         'border': 'none',
                         'padding': '10px',
-                        'backgroundColor': 'white',
                         'transition': 'background-color 0.3s'
-                    }
+                    },
+                    **{'data-initial-load': 'true'}  # Añade este atributo
                 ),
                 html.Div(id={'type': 'recent-event-minimap', 'index': i}, style={'display': 'none'})
             ])
@@ -789,6 +830,7 @@ if 'DYNO' in os.environ:
     app.css.append_css({
         'external_url': 'https://cdn.jsdelivr.net/npm/vega@5.20.2/build/vega.min.css'
     })
+    
 
 if __name__ == '__main__':
     app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
