@@ -154,6 +154,8 @@ app.layout = html.Div([
         html.Div(id='event-details', style={'width': '100%'})
     ], style={'width': '100%', 'maxWidth': '1400px', 'margin': '0 auto'}),
 
+    html.Div(id='event-info', style={'textAlign': 'center', 'padding': '10px', 'border': '1px solid #ddd', 'marginTop': '20px'}),
+
     dcc.Store(id='processed-data-store'),
     dcc.Store(id='clicked-buttons', data=[]),
     html.Div(id='dummy-output'),
@@ -201,6 +203,32 @@ def update_alerts_by_type_figure(processed_data):
     )
     return fig
 
+@app.callback(
+    Output('event-info', 'children'),
+    [Input('alerts-by-type', 'clickData')],
+    [State('processed-data-store', 'data')]
+)
+def display_event_info(clickData, processed_data):
+    if not clickData or not processed_data:
+        return "Haz clic en un evento en el mapa para ver los detalles."
+
+    # Extraer el evento seleccionado basado en el índice
+    selected_event_index = clickData['points'][0]['pointIndex']
+    event_info = processed_data['alert_coordinates'][selected_event_index]
+
+    # Obtener datos relevantes del evento seleccionado
+    evento = event_info.get('evento', 'Evento desconocido')
+    street = event_info.get('street', 'Calle desconocida')
+    nearest_intersection = event_info.get('nearest_intersection', 'Intersección desconocida')
+
+    # Crear el texto a mostrar en el layout
+    return html.Div([
+        html.H4(f"Evento: {evento}"),
+        html.P(f"Calle: {street}"),
+        html.P(f"Intersección más cercana: {nearest_intersection}")
+    ], style={'padding': '10px', 'backgroundColor': '#f9f9f9', 'borderRadius': '5px'})
+
+
 # Callback para actualizar el dashboard completo y manejar el click en el mapa
 @app.callback(
     [Output('alerts-jams', 'children'),
@@ -213,7 +241,10 @@ def update_alerts_by_type_figure(processed_data):
 def update_dashboard_and_isolate_legend_click(n_intervals):
     api_url = "https://www.waze.com/row-partnerhub-api/partners/11517520851/waze-feeds/4004dedf-0b87-4eed-b3f6-e0ad22fa5238?format=1"
     raw_data = fetch_waze_data(api_url)
-    raw_data['alerts'] = [alert for alert in raw_data.get('alerts', []) if alert.get('reportRating', 0) >= 4 and alert.get('reporter') != "Buenos_Aires"]
+    raw_data['alerts'] = [
+    alert for alert in raw_data.get('alerts', [])
+    if alert.get('reportRating', 0) >= 4 and alert.get('type')  # reportRating >= 4 y tiene un 'type'
+]
     processed_data = process_waze_data(raw_data)
     
     # Guardar eventos en un archivo JSON
@@ -269,81 +300,6 @@ def update_dashboard_and_isolate_legend_click(n_intervals):
         clickmode='event+select'
     )
 
-    # if clickData:
-    #     selected_event = clickData['points'][0]['curveNumber']
-    #     filtered_df = df[df['evento'] == selected_event]
-    #     if not filtered_df.empty:
-    #         center_lat = filtered_df['lat'].mean()
-    #         center_lon = filtered_df['lon'].mean()
-    #         alert_map = px.scatter_mapbox(filtered_df, 
-    #                                       lat="lat", 
-    #                                       lon="lon", 
-    #                                       color="evento",  
-    #                                       hover_name="street",
-    #                                       hover_data={
-    #                                           "nearest_intersection": False,
-    #                                           "evento": True,
-    #                                           "lat": False,
-    #                                           "lon": False
-    #                                       },
-    #                                       labels={"nearest_intersection": "Intersección más cercana", "evento": "Evento"},
-    #                                       zoom=12,
-    #                                       center=dict(lat=center_lat, lon=center_lon),
-    #                                       title="Mapa de Alertas")
-    #         alert_map.update_traces(marker=dict(size=15))
-    #         alert_map.update_layout(
-    #     mapbox_style="open-street-map",
-    #     height=600,
-    #     margin=dict(l=0, r=0, t=50, b=0),
-    #     legend=dict(
-    #         orientation="h",
-    #         yanchor="bottom",
-    #         y=-0.1,
-    #         xanchor="center",
-    #         x=0.5
-    #     ),
-    #     dragmode='pan',
-    #     hovermode='closest',
-    #     clickmode='event+select'
-    # )
-    
-    # if clickData:
-    #     selected_event = clickData['points'][0]['curveNumber']
-    #     filtered_df = df[df['evento'] == selected_event]
-    #     if not filtered_df.empty:
-    #         center_lat = filtered_df['lat'].mean()
-    #         center_lon = filtered_df['lon'].mean()
-    #         alert_map = px.scatter_mapbox(filtered_df, 
-    #                                       lat="lat", 
-    #                                       lon="lon", 
-    #                                       color="evento",  
-    #                                       hover_name="street",
-    #                                       hover_data={
-    #                                           "nearest_intersection": False,
-    #                                           "evento": True,
-    #                                           "lat": False,
-    #                                           "lon": False
-    #                                       },
-    #                                       labels={"nearest_intersection": "Intersección más cercana", "evento": "Evento"},
-    #                                       zoom=12,
-    #                                       center=dict(lat=center_lat, lon=center_lon),
-    #                                       title="Mapa de Alertas")
-    #         alert_map.update_traces(marker=dict(size=15))
-    #         alert_map.update_layout(
-    #             mapbox_style="open-street-map",
-    #             height=600,
-    #             margin=dict(l=0, r=0, t=50, b=0),
-    #             legend=dict(
-    #                 orientation="h",
-    #                 yanchor="bottom",
-    #                 y=-0.1,
-    #                 xanchor="center",
-    #                 x=0.5
-    #             ),
-    #             dragmode='pan',
-    #             hovermode='closest'
-    #         )
-    
     alerts_by_type = update_alerts_by_type_figure(processed_data)
     event_details = create_event_details(processed_data)
     recent_events = create_recent_events(processed_data)
@@ -365,6 +321,10 @@ def process_waze_data(raw_data):
         for alert in raw_data['alerts']:
             alert_type = alert.get('type', 'Unknown')
             subtype = alert.get('subtype', alert_type)
+
+            # Saltar eventos sin un tipo o subtipo válido
+            if not alert_type and not subtype:
+                continue
             
             alert_type = event_names.get(alert_type, alert_type)
             subtype = event_names.get(subtype, subtype)
