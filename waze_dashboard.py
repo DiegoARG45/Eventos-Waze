@@ -123,7 +123,7 @@ app.layout = html.Div([
         }),
         dcc.Interval(
             id='interval-component',
-            interval=5*60*1000,  # actualiza cada 5 minutos
+            interval=12*60*1000,  # actualiza cada 5 minutos
             n_intervals=0
         ),
         html.Div(
