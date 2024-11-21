@@ -104,14 +104,17 @@ app.index_string = """
 app.layout = html.Div([
     html.Div([
         html.Div([
+            # Título de la aplicación
             html.H1('EVENTOS DE WAZE', style={
                 'textAlign': 'mid-center', 
                 'fontFamily': 'Calibri', 
+                'fontSize': '28px',  # Tamaño de la fuente ajustado
+                'fontWeight': 'bold',  # Hace que se vea más destacado
                 'flex': '1',
                 'margin': '0'
             }),
             html.Img(src='/assets/waze_logo.png', style={
-                'height': '100px', 
+                'height': '80px',  # Ajustar tamaño si es necesario
                 'marginLeft': 'auto'
             })
         ], style={
@@ -123,36 +126,51 @@ app.layout = html.Div([
         }),
         dcc.Interval(
             id='interval-component',
-            interval=12*60*1000,  # actualiza cada 5 minutos
+            interval=10*60*1000,  # actualiza cada 10 minutos
             n_intervals=0
         ),
+        # Total de alertas y atascos
         html.Div(
             id='alerts-jams',
-            style={'textAlign': 'center', 'border': '2px solid yellow', 'padding': '10px', 'margin': '10px 0'}
+            style={
+                'textAlign': 'center', 
+                'border': '2px solid yellow', 
+                'padding': '10px', 
+                'margin': '10px 0', 
+                'fontSize': '18px',  # Tamaño de fuente ajustado
+                'fontFamily': 'Calibri'
+            }
         ),
-    ], style={'width': '100%', 'maxWidth': '1200px', 'margin': '0 auto'}),
+    ], style={'width': '100%', 'maxWidth': '900px', 'margin': '0 auto'}),
 
     html.Div([
+        # Sección del mapa
         html.Div([
-            # Incrusta el mapa de QGIS en un iframe
             html.Iframe(
                 src='/assets/mapaqgis.html',  # Ruta al archivo HTML de QGIS
-                style={'height': '600px', 'width': '100%', 'border': 'none'}
+                style={'height': '800px', 'width': '100%', 'border': 'none'}
             )
-        ], style={'width': '70%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+        ], style={'width': '100%', 'marginBottom': '20px'}),
+        
+        # Sección de últimos 15 eventos
         html.Div([
             html.H3('Últimos 15 Eventos', style={'textAlign': 'center'}),
-            html.Div(id='recent-events', style={'overflowY': 'auto', 'maxHeight': '600px'})
-        ], style={'width': '28%', 'display': 'inline-block', 'verticalAlign': 'top', 'marginLeft': '2%'})
+            html.Div(id='recent-events', style={
+                'overflowY': 'auto', 
+                'maxHeight': '400px', 
+                'border': '1px solid #ccc', 
+                'padding': '10px'
+            })
+        ], style={'width': '100%', 'margin': '0 auto'})
     ], style={'width': '100%', 'maxWidth': '1300px', 'margin': '0 auto'}),
     
     html.Div([
-        dcc.Graph(id='alerts-by-type', style={'height': '400px'})
-    ], style={'width': '100%', 'maxWidth': '1200px', 'margin': '20px auto'}),
-
-    html.Div([
         html.Div(id='event-details', style={'width': '100%'})
     ], style={'width': '100%', 'maxWidth': '1400px', 'margin': '0 auto'}),
+
+    html.Div([
+        dcc.Graph(id='alerts-by-type', style={'height': '400px'})
+    ], style={'width': '100%', 'maxWidth': '1200px', 'margin': '20px auto'}),
 
     html.Div(id='event-info', style={'textAlign': 'center', 'padding': '10px', 'border': '1px solid #ddd', 'marginTop': '20px'}),
 
@@ -181,7 +199,7 @@ app.layout = html.Div([
 style={
     'fontFamily': 'Roboto, Calibri',
     'margin': '0 auto',
-    'padding': '20px',
+    'padding': '10px',
     'maxWidth': '1400px',
     'backgroundColor': '#e0e0e0'
 })
@@ -246,13 +264,6 @@ def update_dashboard_and_isolate_legend_click(n_intervals):
     if alert.get('reportRating', 0) >= 4 and alert.get('type')  # reportRating >= 4 y tiene un 'type'
 ]
     processed_data = process_waze_data(raw_data)
-    
-    # Guardar eventos en un archivo JSON
-    with open('assets/resources/eventos.json', 'w') as json_file:
-        json.dump(processed_data['alert_coordinates'], json_file)
-
-    # Ejecutar el script convert_json_to_geojson.py
-    subprocess.run(['python', 'assets/resources/convert_json_to_geojson.py'])       
 
     # Resto del código del callback
     alerts_jams = html.Div([
