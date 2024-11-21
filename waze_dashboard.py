@@ -30,22 +30,6 @@ import json
 from fetch_waze_data import fetch_waze_data, process_waze_data
 import requests
 
-
-# Diccionario de nombres de eventos
-event_names = {
-    'HAZARD_ON_ROAD_POT_HOLE': 'Baches en el camino',
-    'ROAD_CLOSED_EVENT': 'Via cerrada',
-    'HAZARD_ON_ROAD_CONSTRUCTION': 'Obras en la calzada',
-    'JAM_HEAVY_TRAFFIC': 'Atasco tráfico pesado',
-    'JAM_STAND_STILL_TRAFFIC': 'Atasco tráfico denso',
-    'HAZARD_ON_SHOULDER_CAR_STOPPED': 'Vehículo detenido',
-    'HAZARD_ON_ROAD': 'Peligro en calle',
-    'HAZARD_ON_ROAD_TRAFFIC_LIGHT_FAULT': 'Falla de semáforo',
-    'HAZARD_ON_ROAD_LANE_CLOSED': 'Carril cerrado',
-    'HAZARD_ON_ROAD_OBJECT': 'Objeto en el camino',
-    'ACCIDENT_MAJOR': 'Accidente grave'
-}
-
 # Definimos la zona horaria de Buenos Aires
 buenos_aires_tz = pytz.timezone('America/Argentina/Buenos_Aires')
 
@@ -64,6 +48,9 @@ event_names = {
     'ACCIDENT_MAJOR': 'Accidente grave'
 }
 
+
+# Definimos la zona horaria de Buenos Aires
+buenos_aires_tz = pytz.timezone('America/Argentina/Buenos_Aires')
 
 # Función para obtener datos de la API de Waze
 def fetch_waze_data(api_url):
@@ -125,6 +112,41 @@ def process_waze_data(raw_data):
 
     return processed_data
 
+# Función para convertir JSON a GeoJSON
+def convert_json_to_geojson(input_file, output_file):
+    try:
+        with open(input_file, 'r') as json_file:
+            data = json.load(json_file)
+        
+        geojson_data = {
+            "type": "FeatureCollection",
+            "features": []
+        }
+
+        # Asumiendo que 'data' es una lista de coordenadas de eventos
+        for event in data:
+            feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [event['lon'], event['lat']]  # Asegúrate de que las claves sean correctas
+                },
+                "properties": {
+                    "evento": event['evento'],
+                    "street": event['street'],
+                    "nearest_intersection": event['nearest_intersection']
+                }
+            }
+            geojson_data["features"].append(feature)
+
+        # Guardar el archivo GeoJSON
+        with open(output_file, 'w') as geojson_file:
+            json.dump(geojson_data, geojson_file, indent=4)
+        print(f"GeoJSON guardado correctamente en {output_file}")
+
+    except Exception as e:
+        print(f"Error al convertir JSON a GeoJSON: {e}")
+
 # Función para actualizar los eventos
 def update_events():
     print(f"[{datetime.now()}] Ejecutando actualización de eventos...")
@@ -143,6 +165,11 @@ def update_events():
         with open(output_path, 'w') as json_file:
             json.dump(processed_data['alert_coordinates'], json_file)
         print(f"[{datetime.now()}] Archivo eventos.json guardado en {output_path}")
+
+        # Convertir a GeoJSON
+        geojson_output_path = os.path.join(os.getcwd(), 'assets', 'resources', 'eventos_geojson.json')
+        convert_json_to_geojson(output_path, geojson_output_path)
+
     except Exception as e:
         print(f"Error al guardar eventos.json: {e}")
 
@@ -155,7 +182,6 @@ def run_background_update():
 # Crear y arrancar el hilo de actualización en segundo plano
 update_thread = threading.Thread(target=run_background_update, daemon=True)
 update_thread.start()
-
 
 # Inicializar la app de Dash
 app = dash.Dash(__name__)
@@ -885,4 +911,5 @@ if 'DYNO' in os.environ:
     
 
 if __name__ == '__main__':
+    update_events()  # Regenerar el archivo eventos.json al iniciar
     app.run_server(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 8080)))
