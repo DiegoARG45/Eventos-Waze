@@ -28,7 +28,23 @@ from collections import defaultdict
 import pytz
 import json
 from fetch_waze_data import fetch_waze_data, process_waze_data
+import requests
 
+
+# Diccionario de nombres de eventos
+event_names = {
+    'HAZARD_ON_ROAD_POT_HOLE': 'Baches en el camino',
+    'ROAD_CLOSED_EVENT': 'Via cerrada',
+    'HAZARD_ON_ROAD_CONSTRUCTION': 'Obras en la calzada',
+    'JAM_HEAVY_TRAFFIC': 'Atasco tráfico pesado',
+    'JAM_STAND_STILL_TRAFFIC': 'Atasco tráfico denso',
+    'HAZARD_ON_SHOULDER_CAR_STOPPED': 'Vehículo detenido',
+    'HAZARD_ON_ROAD': 'Peligro en calle',
+    'HAZARD_ON_ROAD_TRAFFIC_LIGHT_FAULT': 'Falla de semáforo',
+    'HAZARD_ON_ROAD_LANE_CLOSED': 'Carril cerrado',
+    'HAZARD_ON_ROAD_OBJECT': 'Objeto en el camino',
+    'ACCIDENT_MAJOR': 'Accidente grave'
+}
 
 # Definimos la zona horaria de Buenos Aires
 buenos_aires_tz = pytz.timezone('America/Argentina/Buenos_Aires')
@@ -48,9 +64,68 @@ event_names = {
     'ACCIDENT_MAJOR': 'Accidente grave'
 }
 
-# Función para actualizar los eventos
-import os
 
+# Función para obtener datos de la API de Waze
+def fetch_waze_data(api_url):
+    response = requests.get(api_url)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Error al obtener datos de Waze: {response.status_code}")
+        return {}
+
+# Función para procesar los datos de Waze
+def process_waze_data(raw_data):
+    processed_data = {
+        'alerts': 0,
+        'jams': 0,
+        'total_jam_length': 0,
+        'alerts_by_type': {},
+        'alert_details': defaultdict(list),
+        'alert_coordinates': []
+    }
+    if 'alerts' in raw_data:
+        processed_data['alerts'] = len(raw_data['alerts'])
+        for alert in raw_data['alerts']:
+            alert_type = alert.get('type', 'Unknown')
+            subtype = alert.get('subtype', alert_type)
+            subtype = event_names.get(subtype, subtype)  # Traducir nombre del evento
+            
+            pubMillis = alert.get('pubMillis', 0)
+            date_obj = datetime.fromtimestamp(pubMillis / 1000.0, tz=pytz.UTC).astimezone(buenos_aires_tz)
+            date_str = date_obj.strftime('%d/%m %H:%M')
+
+            street = alert.get('street', 'Calle desconocida')
+            nearest_intersection = alert.get('nearBy', 'Intersección desconocida')
+
+            if subtype not in processed_data['alerts_by_type']:
+                processed_data['alerts_by_type'][subtype] = 0
+            processed_data['alerts_by_type'][subtype] += 1
+
+            processed_data['alert_details'][subtype].append({
+                'date': date_str,
+                'date_obj': date_obj,
+                'location': alert.get('location', {}),
+                'street': street,
+                'nearest_intersection': nearest_intersection
+            })
+
+            if 'location' in alert and 'x' in alert['location'] and 'y' in alert['location']:
+                processed_data['alert_coordinates'].append({
+                    'lat': alert['location']['y'],
+                    'lon': alert['location']['x'],
+                    'evento': subtype,
+                    'street': street,
+                    'nearest_intersection': nearest_intersection
+                })
+
+    if 'jams' in raw_data:
+        processed_data['jams'] = len(raw_data['jams'])
+        processed_data['total_jam_length'] = sum(jam.get('length', 0) for jam in raw_data['jams'])
+
+    return processed_data
+
+# Función para actualizar los eventos
 def update_events():
     print(f"[{datetime.now()}] Ejecutando actualización de eventos...")
     api_url = "https://www.waze.com/row-partnerhub-api/partners/11517520851/waze-feeds/4004dedf-0b87-4eed-b3f6-e0ad22fa5238?format=1"
@@ -61,28 +136,26 @@ def update_events():
     ]
     processed_data = process_waze_data(raw_data)
 
-    # Define la ruta absoluta para guardar eventos.json
+    # Guardar eventos en un archivo JSON
     output_path = os.path.join(os.getcwd(), 'assets', 'resources', 'eventos.json')
-    
-    # Intenta guardar el archivo
     try:
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)  # Crea la carpeta si no existe
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, 'w') as json_file:
             json.dump(processed_data['alert_coordinates'], json_file)
         print(f"[{datetime.now()}] Archivo eventos.json guardado en {output_path}")
     except Exception as e:
         print(f"Error al guardar eventos.json: {e}")
 
-
-# Función para manejar las actualizaciones periódicas en un hilo separado
+# Función para manejar actualizaciones en segundo plano
 def run_background_update():
     while True:
         update_events()
-        time.sleep(600)  # Esperar 10 minutos antes de la próxima actualización
+        time.sleep(600)  # Actualiza cada 10 minutos
 
 # Crear y arrancar el hilo de actualización en segundo plano
 update_thread = threading.Thread(target=run_background_update, daemon=True)
 update_thread.start()
+
 
 # Inicializar la app de Dash
 app = dash.Dash(__name__)
@@ -206,6 +279,7 @@ app.layout = html.Div([
     ], style={'width': '100%', 'maxWidth': '1200px', 'margin': '20px auto'}),
 
     html.Div(id='event-info', style={'textAlign': 'center', 'padding': '10px', 'border': '1px solid #ddd', 'marginTop': '20px'}),
+    
 
     dcc.Store(id='processed-data-store'),
     dcc.Store(id='clicked-buttons', data=[]),
