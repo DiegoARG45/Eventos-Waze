@@ -49,21 +49,30 @@ event_names = {
 }
 
 # Función para actualizar los eventos
+import os
+
 def update_events():
     print(f"[{datetime.now()}] Ejecutando actualización de eventos...")
     api_url = "https://www.waze.com/row-partnerhub-api/partners/11517520851/waze-feeds/4004dedf-0b87-4eed-b3f6-e0ad22fa5238?format=1"
     raw_data = fetch_waze_data(api_url)
     raw_data['alerts'] = [
         alert for alert in raw_data.get('alerts', [])
-        if alert.get('reportRating', 0) >= 4 and alert.get('type')  # reportRating >= 4 y tiene un 'type'
+        if alert.get('reportRating', 0) >= 4 and alert.get('type')
     ]
     processed_data = process_waze_data(raw_data)
+
+    # Define la ruta absoluta para guardar eventos.json
+    output_path = os.path.join(os.getcwd(), 'assets', 'resources', 'eventos.json')
     
-    # Guardar eventos en un archivo JSON
-    with open('assets/resources/eventos.json', 'w') as json_file:
-        json.dump(processed_data['alert_coordinates'], json_file)
-    
-    print(f"[{datetime.now()}] Actualización de eventos completa.")
+    # Intenta guardar el archivo
+    try:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)  # Crea la carpeta si no existe
+        with open(output_path, 'w') as json_file:
+            json.dump(processed_data['alert_coordinates'], json_file)
+        print(f"[{datetime.now()}] Archivo eventos.json guardado en {output_path}")
+    except Exception as e:
+        print(f"Error al guardar eventos.json: {e}")
+
 
 # Función para manejar las actualizaciones periódicas en un hilo separado
 def run_background_update():
