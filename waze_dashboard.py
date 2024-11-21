@@ -19,14 +19,15 @@ import dash
 import plotly.express as px
 import plotly.graph_objects as go
 import math
+import threading
+import time
 from dash import html, dcc
-from dash.dependencies import Input, Output, State 
-from fetch_waze_data import fetch_waze_data, process_waze_data
+from dash.dependencies import Input, Output, State
 from datetime import datetime
 from collections import defaultdict
 import pytz
 import json
-import subprocess
+from fetch_waze_data import fetch_waze_data, process_waze_data
 
 
 # Definimos la zona horaria de Buenos Aires
@@ -47,7 +48,34 @@ event_names = {
     'ACCIDENT_MAJOR': 'Accidente grave'
 }
 
-# Inicializar la app de dash
+# Función para actualizar los eventos
+def update_events():
+    print(f"[{datetime.now()}] Ejecutando actualización de eventos...")
+    api_url = "https://www.waze.com/row-partnerhub-api/partners/11517520851/waze-feeds/4004dedf-0b87-4eed-b3f6-e0ad22fa5238?format=1"
+    raw_data = fetch_waze_data(api_url)
+    raw_data['alerts'] = [
+        alert for alert in raw_data.get('alerts', [])
+        if alert.get('reportRating', 0) >= 4 and alert.get('type')  # reportRating >= 4 y tiene un 'type'
+    ]
+    processed_data = process_waze_data(raw_data)
+    
+    # Guardar eventos en un archivo JSON
+    with open('assets/resources/eventos.json', 'w') as json_file:
+        json.dump(processed_data['alert_coordinates'], json_file)
+    
+    print(f"[{datetime.now()}] Actualización de eventos completa.")
+
+# Función para manejar las actualizaciones periódicas en un hilo separado
+def run_background_update():
+    while True:
+        update_events()
+        time.sleep(600)  # Esperar 10 minutos antes de la próxima actualización
+
+# Crear y arrancar el hilo de actualización en segundo plano
+update_thread = threading.Thread(target=run_background_update, daemon=True)
+update_thread.start()
+
+# Inicializar la app de Dash
 app = dash.Dash(__name__)
 
 app.index_string = """
@@ -104,17 +132,16 @@ app.index_string = """
 app.layout = html.Div([
     html.Div([
         html.Div([
-            # Título de la aplicación
             html.H1('EVENTOS DE WAZE', style={
                 'textAlign': 'mid-center', 
                 'fontFamily': 'Calibri', 
-                'fontSize': '28px',  # Tamaño de la fuente ajustado
-                'fontWeight': 'bold',  # Hace que se vea más destacado
+                'fontSize': '28px', 
+                'fontWeight': 'bold', 
                 'flex': '1',
                 'margin': '0'
             }),
             html.Img(src='/assets/waze_logo.png', style={
-                'height': '80px',  # Ajustar tamaño si es necesario
+                'height': '80px',
                 'marginLeft': 'auto'
             })
         ], style={
@@ -126,10 +153,9 @@ app.layout = html.Div([
         }),
         dcc.Interval(
             id='interval-component',
-            interval=10*60*1000,  # actualiza cada 10 minutos
+            interval=10*60*1000,  # Actualiza cada 10 minutos
             n_intervals=0
         ),
-        # Total de alertas y atascos
         html.Div(
             id='alerts-jams',
             style={
@@ -137,22 +163,20 @@ app.layout = html.Div([
                 'border': '2px solid yellow', 
                 'padding': '10px', 
                 'margin': '10px 0', 
-                'fontSize': '18px',  # Tamaño de fuente ajustado
+                'fontSize': '18px',
                 'fontFamily': 'Calibri'
             }
         ),
     ], style={'width': '100%', 'maxWidth': '900px', 'margin': '0 auto'}),
 
     html.Div([
-        # Sección del mapa
         html.Div([
             html.Iframe(
-                src='/assets/mapaqgis.html',  # Ruta al archivo HTML de QGIS
+                src='/assets/mapaqgis.html',
                 style={'height': '800px', 'width': '100%', 'border': 'none'}
             )
         ], style={'width': '100%', 'marginBottom': '20px'}),
         
-        # Sección de últimos 15 eventos
         html.Div([
             html.H3('Últimos 15 Eventos', style={'textAlign': 'center'}),
             html.Div(id='recent-events', style={
@@ -176,25 +200,7 @@ app.layout = html.Div([
 
     dcc.Store(id='processed-data-store'),
     dcc.Store(id='clicked-buttons', data=[]),
-    html.Div(id='dummy-output'),
-
-    html.Script('''
-        document.addEventListener('DOMContentLoaded', function() {
-            const buttons = document.querySelectorAll('button[id^="alert-button"], button[id^="recent-event-button"]');
-            buttons.forEach(button => {
-                let buttonIndex;
-                if (button.id.startsWith('{')) {
-                    buttonIndex = button.id.split('"index":')[1].split('}')[0];
-                } else {
-                    buttonIndex = button.id.split('-')[2];
-                    buttonIndex = 'recent-event-' + buttonIndex;
-                }
-                if (localStorage.getItem(buttonIndex) === 'clicked') {
-                    button.style.backgroundColor = 'lightblue';
-                }
-            });
-        });
-    ''')
+    html.Div(id='dummy-output')
 ],  
 style={
     'fontFamily': 'Roboto, Calibri',

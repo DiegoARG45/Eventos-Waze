@@ -105,7 +105,7 @@ def update_events():
 
 def schedule_update():
     update_events()  # Ejecutar inmediatamente la primera vez
-    scheduler.enter(720, 1, schedule_update)  # Programar cada 720 segundos (12 minutos)
+    scheduler.enter(600, 1, schedule_update)  # Programar cada 720 segundos (12 minutos)
 
 if __name__ == "__main__":
     print("Iniciando actualización periódica cada 12 minutos...")
