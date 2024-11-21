@@ -29,6 +29,8 @@ import pytz
 import json
 from fetch_waze_data import fetch_waze_data, process_waze_data
 import requests
+from flask import Flask, send_from_directory
+from flask_cors import CORS
 
 # Definimos la zona horaria de Buenos Aires
 buenos_aires_tz = pytz.timezone('America/Argentina/Buenos_Aires')
@@ -51,6 +53,16 @@ event_names = {
 
 # Definimos la zona horaria de Buenos Aires
 buenos_aires_tz = pytz.timezone('America/Argentina/Buenos_Aires')
+
+app = Flask(__name__)
+
+# Habilitar CORS para todas las rutas
+CORS(app)  # Esto permite que todas las rutas sirvan recursos desde otros orígenes
+
+# Servir archivos estáticos (como eventos_geojson.json)
+@app.route('/assets/resources/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(os.path.join(os.getcwd(), 'assets', 'resources'), filename)
 
 # Función para obtener datos de la API de Waze
 def fetch_waze_data(api_url):
