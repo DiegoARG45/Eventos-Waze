@@ -64,20 +64,22 @@
         <script src="./resources/qgis2web.js"></script>
         <script>
             function updateEventosGeoJSON() {
-                fetch('resources/eventos_geojson.json')  // Assumes the file is in 'resources'
-                .then(response => response.json())
-                .then(data => {
-                    lyr_eventos_geojson_39.getSource().clear(); // Clear existing features
-                    var format = new ol.format.GeoJSON();
-                    var features = format.readFeatures(data, {
-                        dataProjection: 'EPSG:4326',
-                        featureProjection: 'EPSG:3857'
-                    });
-                    lyr_eventos_geojson_39.getSource().addFeatures(features);
-                })
-                .catch(error => console.error("Error loading GeoJSON:", error)); 
+                setTimeout(function() {
+                    fetch('assets/resources/eventos_geojson.json')  // Assumes the file is in 'assets/resources'
+                    .then(response => response.json())
+                    .then(data => {
+                        lyr_eventos_geojson_39.getSource().clear(); // Clear existing features
+                        var format = new ol.format.GeoJSON();
+                        var features = format.readFeatures(data, {
+                            dataProjection: 'EPSG:4326',
+                            featureProjection: 'EPSG:3857'
+                        });
+                        lyr_eventos_geojson_39.getSource().addFeatures(features);
+                    })
+                    .catch(error => console.error("Error loading GeoJSON:", error));
+                }, 1000); // Delay 1 second to ensure file is updated
             }
-
+            
             updateEventosGeoJSON(); // Initial load
             setInterval(updateEventosGeoJSON, 60000); // Update every minute (60000 milliseconds)
         </script>
