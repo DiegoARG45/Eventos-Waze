@@ -29,8 +29,6 @@ import pytz
 import json
 from fetch_waze_data import fetch_waze_data, process_waze_data
 import requests
-from flask import Flask, send_from_directory
-from flask_cors import CORS
 
 # Definimos la zona horaria de Buenos Aires
 buenos_aires_tz = pytz.timezone('America/Argentina/Buenos_Aires')
@@ -53,16 +51,6 @@ event_names = {
 
 # Definimos la zona horaria de Buenos Aires
 buenos_aires_tz = pytz.timezone('America/Argentina/Buenos_Aires')
-
-app = Flask(__name__)
-
-# Habilitar CORS para todas las rutas
-CORS(app)  # Esto permite que todas las rutas sirvan recursos desde otros orígenes
-
-# Servir archivos estáticos (como eventos_geojson.json)
-@app.route('/assets/resources/<path:filename>')
-def serve_static(filename):
-    return send_from_directory(os.path.join(os.getcwd(), 'assets', 'resources'), filename)
 
 # Función para obtener datos de la API de Waze
 def fetch_waze_data(api_url):
@@ -290,6 +278,24 @@ app.layout = html.Div([
     ], style={'width': '100%', 'maxWidth': '900px', 'margin': '0 auto'}),
 
     html.Div([
+    html.Button(
+        "ACTUALIZAR EVENTOS",
+        id="update-button",
+        style={
+            'margin': '10px',
+            'padding': '10px 20px',
+            'fontSize': '16px',
+            'backgroundColor': '#4CAF50',
+            'color': 'white',
+            'border': 'none',
+            'cursor': 'pointer',
+            'borderRadius': '5px'
+        }
+    ),
+    html.Div(id='update-status', style={'marginTop': '10px', 'color': 'green'})
+    ]),
+
+    html.Div([
         html.Div([
             html.Iframe(
                 src='/assets/mapaqgis.html',
@@ -330,6 +336,19 @@ style={
     'maxWidth': '1400px',
     'backgroundColor': '#e0e0e0'
 })
+
+@app.callback(
+    Output('update-status', 'children'),
+    [Input('update-button', 'n_clicks')]
+)
+def force_update(n_clicks):
+    if n_clicks:
+        try:
+            update_events()
+            return f"Eventos actualizados exitosamente a las {datetime.now().strftime('%H:%M:%S')}."
+        except Exception as e:
+            return f"Error al actualizar los eventos: {str(e)}"
+    return ""
 
 
 # Función para actualizar las alertas por tipo
