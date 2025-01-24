@@ -1,0 +1,74 @@
+{
+   "documentation" : "https://opencagedata.com/api",
+   "licenses" : [
+      {
+         "name" : "see attribution guide",
+         "url" : "https://opencagedata.com/credits"
+      }
+   ],
+   "rate" : {
+      "limit" : 2500,
+      "remaining" : 2499,
+      "reset" : 1731715200
+   },
+   "results" : [
+      {
+         "bounds" : {
+            "northeast" : {
+               "lat" : 52.387833,
+               "lng" : 9.7334894
+            },
+            "southwest" : {
+               "lat" : 52.387733,
+               "lng" : 9.7333894
+            }
+         },
+         "components" : {
+            "ISO_3166-1_alpha-2" : "DE",
+            "ISO_3166-1_alpha-3" : "DEU",
+            "ISO_3166-2" : [
+               "DE-NI"
+            ],
+            "_category" : "building",
+            "_normalized_city" : "Han\u00f3ver",
+            "_type" : "building",
+            "city" : "Han\u00f3ver",
+            "city_district" : "Vahrenwald-List",
+            "continent" : "Europe",
+            "country" : "Alemania",
+            "country_code" : "de",
+            "county" : "Regi\u00f3n de Han\u00f3ver",
+            "house_number" : "2",
+            "office" : "Design Offices",
+            "political_union" : "European Union",
+            "postcode" : "30165",
+            "road" : "Philipsbornstra\u00dfe",
+            "state" : "Baja Sajonia",
+            "suburb" : "Vahrenwald"
+         },
+         "confidence" : 10,
+         "distance_from_q" : {
+            "meters" : 0
+         },
+         "formatted" : "Design Offices, Philipsbornstra\u00dfe 2, 30165 Han\u00f3ver, Alemania",
+         "geometry" : {
+            "lat" : 52.387783,
+            "lng" : 9.7334394
+         }
+      }
+   ],
+   "status" : {
+      "code" : 200,
+      "message" : "OK"
+   },
+   "stay_informed" : {
+      "blog" : "https://blog.opencagedata.com",
+      "mastodon" : "https://en.osm.town/@opencage"
+   },
+   "thanks" : "For using an OpenCage API",
+   "timestamp" : {
+      "created_http" : "Fri, 15 Nov 2024 14:10:41 GMT",
+      "created_unix" : 1731679841
+   },
+   "total_results" : 1
+}
